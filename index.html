@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Pi Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Privacy Pi Dashboard</h1>
+    </header>
+    <div class="container">
+        <div class="dashboard">
+            <div class="card">
+                <h2>Connected Devices</h2>
+                <ul id="deviceList" class="device-list"></ul>
+            </div>
+            <div class="card">
+                <h2>Connection Status</h2>
+                <p>Current Status: <span id="connectionStatus" class="status"></span></p>
+                <p>Protocol: <span id="protocol"></span></p>
+                <p>Server Location: <span id="serverLocation"></span></p>
+                <select id="countrySelect" class="glow-button">
+                    <option>Select a country</option>
+                </select>
+                <button id="connectVPN" class="glow-button">Connect VPN</button>
+                <button id="connectTor" class="glow-button">Connect Tor</button>
+            </div>
+            <div class="card">
+                <h2>Network Traffic</h2>
+                <canvas id="trafficChart"></canvas>
+            </div>
+            <div class="card">
+                <h2>System Logs</h2>
+                <div id="logContainer" class="log-container"></div>
+            </div>
+        </div>
+        <div class="visualization">
+            <div id="globeContainer"></div>
+            <div id="meshContainer"></div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
