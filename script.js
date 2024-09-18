@@ -13,20 +13,27 @@ function initGlobe() {
     globe = new THREE.Mesh(geometry, material);
     globeScene.add(globe);
 
-    // Country labels
+    // Country labels with animated positions
     const countries = [
-        { name: 'Netherlands', position: { x: 1.5, y: 2, z: 4 } },
-        { name: 'Switzerland', position: { x: 2, y: 0, z: 4.5 } },
-        { name: 'Japan', position: { x: -3, y: 1.5, z: 4 } },
-        { name: 'United States', position: { x: -2.5, y: -1, z: 4 } }
+        { name: 'Netherlands', position: new THREE.Vector3(1.5, 2, 4) },
+        { name: 'Switzerland', position: new THREE.Vector3(2, 0, 4.5) },
+        { name: 'Japan', position: new THREE.Vector3(-3, 1.5, 4) },
+        { name: 'United States', position: new THREE.Vector3(-2.5, -1, 4) }
     ];
 
     countries.forEach(country => {
         const div = document.createElement('div');
         div.className = 'countryLabel';
         div.textContent = country.name;
-        document.body.appendChild(div);
+        document.querySelector("#globeContainer").appendChild(div);
         countryLabels.push({ element: div, position: country.position });
+
+        // Add a mesh for each country
+        const countryGeometry = new THREE.SphereGeometry(0.1, 16, 16);
+        const countryMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        const countryMesh = new THREE.Mesh(countryGeometry, countryMaterial);
+        countryMesh.position.copy(country.position);
+        globeScene.add(countryMesh);
     });
 
     globeCamera.position.z = 15;
@@ -38,20 +45,25 @@ function animateGlobe() {
     requestAnimationFrame(animateGlobe);
     globe.rotation.y += 0.005;
 
-    // Update country label positions
-    countryLabels.forEach(label => {
-        const vector = new THREE.Vector3(label.position.x, label.position.y, label.position.z);
+    // Update country label and mesh positions
+    countryLabels.forEach((label, index) => {
+        // Animate the position
+        label.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), 0.005);
+
+        // Update the label position
+        const vector = label.position.clone();
         vector.project(globeCamera);
         const x = (vector.x * 0.5 + 0.5) * globeRenderer.domElement.clientWidth;
         const y = (vector.y * -0.5 + 0.5) * globeRenderer.domElement.clientHeight;
-        label.element.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px)`;
+        label.element.style.transform = `translate(-50%, -50%) translate(${x}px, -${y}px)`;
+
+        // Update the mesh position
+        globeScene.children[index + 1].position.copy(label.position);
     });
 
     globeRenderer.render(globeScene, globeCamera);
 }
-
-// Mesh network visualization
-let meshScene, meshCamera, meshRenderer, meshNodes = [], connections = [];
+let meshScene, meshCamera, meshRenderer, meshNodes = [], connections = [], countryNodes = [];
 
 function initMesh() {
     meshScene = new THREE.Scene();
@@ -61,7 +73,9 @@ function initMesh() {
     document.getElementById('meshContainer').appendChild(meshRenderer.domElement);
 
     const nodeMaterial = new THREE.MeshBasicMaterial({ color: 0x9d4edd });
+    const countryMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
 
+    // Create regular nodes
     for (let i = 0; i < 20; i++) {
         const geometry = new THREE.SphereGeometry(0.1, 32, 32);
         const node = new THREE.Mesh(geometry, nodeMaterial);
@@ -73,6 +87,28 @@ function initMesh() {
         meshNodes.push(node);
         meshScene.add(node);
     }
+
+    // Add country nodes
+    const countries = [
+        { name: 'Netherlands', position: new THREE.Vector3(1.5, 2, 4) },
+        { name: 'Switzerland', position: new THREE.Vector3(2, 0, 4.5) },
+        { name: 'Japan', position: new THREE.Vector3(-3, 1.5, 4) },
+        { name: 'United States', position: new THREE.Vector3(-2.5, -1, 4) }
+    ];
+
+    countries.forEach(country => {
+        const geometry = new THREE.SphereGeometry(0.2, 32, 32);
+        const node = new THREE.Mesh(geometry, countryMaterial);
+        node.position.copy(country.position);
+        countryNodes.push({ node, name: country.name });
+        meshScene.add(node);
+
+        // Create label for country node
+        const div = document.createElement('div');
+        div.className = 'countryLabel';
+        div.textContent = country.name;
+        document.getElementById('meshContainer').appendChild(div);
+    });
 
     // Add animated connections (lines) between nodes
     const lineMaterial = new THREE.LineBasicMaterial({ color: 0x9d4edd });
@@ -87,20 +123,56 @@ function initMesh() {
         });
     });
 
+    // Add connections from country nodes to nearest regular nodes
+    countryNodes.forEach(countryNode => {
+        const nearestNodes = getNearestNodes(countryNode.node.position, meshNodes, 3);
+        nearestNodes.forEach(nearNode => {
+            const geometry = new THREE.BufferGeometry().setFromPoints([countryNode.node.position, nearNode.position]);
+            const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0xffff00 }));
+            connections.push(line);
+            meshScene.add(line);
+        });
+    });
+
     meshCamera.position.z = 15;
 
     animateMesh();
 }
 
+function getNearestNodes(position, nodes, count) {
+    return nodes
+        .map(node => ({ node, distance: position.distanceTo(node.position) }))
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, count)
+        .map(item => item.node);
+}
+
 function animateMesh() {
     requestAnimationFrame(animateMesh);
+
+    // Animate regular nodes
     meshNodes.forEach(node => {
         node.position.x += (Math.random() - 0.5) * 0.01;
         node.position.y += (Math.random() - 0.5) * 0.01;
         node.position.z += (Math.random() - 0.5) * 0.01;
     });
 
-    // Update connection lines with a pulsing effect
+    // Animate country nodes
+    countryNodes.forEach(countryNode => {
+        countryNode.node.position.applyAxisAngle(new THREE.Vector3(0, 1, 0), 0.005);
+
+        // Update country label positions
+        const vector = countryNode.node.position.clone().project(meshCamera);
+        const x = (vector.x * 0.5 + 0.5) * meshRenderer.domElement.clientWidth;
+        const y = (vector.y * -0.5 + 0.5) * meshRenderer.domElement.clientHeight;
+        const label = Array.from(document.getElementById('meshContainer').getElementsByClassName('countryLabel'))
+            .find(el => el.textContent === countryNode.name);
+        if (label) {
+            label.style.transform = `translate(-50%, -50%) translate(${x}px, -${y}px)`;
+        }
+    });
+
+    // Update connection lines
     connections.forEach(line => {
         const scale = Math.sin(Date.now() * line.userData.pulseSpeed + line.userData.offset * Math.PI * 2) * 0.1 + 1;
         line.scale.set(scale, scale, scale);
