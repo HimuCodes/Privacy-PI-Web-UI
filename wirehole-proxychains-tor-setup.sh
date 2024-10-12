@@ -1,6 +1,98 @@
 #!/bin/bash
 
-# ... [Previous parts of the script remain the same] ...
+# Exit immediately if a command exits with a non-zero status.
+set -e
+
+# Update and upgrade the system
+echo "Updating and upgrading the system..."
+sudo apt-get update && sudo apt-get upgrade -y
+
+# Install prerequisites
+echo "Installing prerequisites..."
+sudo apt-get install -yqq \
+    curl \
+    git \
+    apt-transport-https \
+    ca-certificates \
+    gnupg-agent \
+    software-properties-common \
+    wireguard \
+    iptables \
+    tor \
+    proxychains4 \
+    python3-pip
+
+# Install Docker
+echo "Installing Docker..."
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER
+
+# Install Docker Compose
+echo "Installing Docker Compose..."
+sudo pip3 install docker-compose
+
+# Enable IP forwarding
+echo "Enabling IP forwarding..."
+sudo sysctl -w net.ipv4.ip_forward=1
+sudo sh -c 'echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf'
+sudo sysctl -p
+
+# Generate WireGuard keys
+echo "Generating WireGuard keys..."
+umask 077
+wg genkey | tee server_private_key | wg pubkey > server_public_key
+wg genkey | tee client_private_key | wg pubkey > client_public_key
+
+# Create WireGuard configuration file
+echo "Creating WireGuard configuration file..."
+sudo mkdir -p /etc/wireguard
+cat <<EOT | sudo tee /etc/wireguard/wg0.conf
+[Interface]
+Address = 10.66.66.1/24
+ListenPort = 51820
+PrivateKey = $(cat server_private_key)
+SaveConfig = true
+
+[Peer]
+PublicKey = $(cat client_public_key)
+AllowedIPs = 10.66.66.2/32
+EOT
+
+# Configure firewall (iptables)
+echo "Configuring firewall (iptables)..."
+NETWORK_IFACE=$(ip route get 1 | awk '{print $5; exit}')
+sudo iptables -A INPUT -p udp --dport 51820 -j ACCEPT
+sudo iptables -A INPUT -i wg0 -j ACCEPT
+sudo iptables -A FORWARD -i wg0 -j ACCEPT
+sudo iptables -A FORWARD -o wg0 -j ACCEPT
+sudo iptables -t nat -A POSTROUTING -o "$NETWORK_IFACE" -j MASQUERADE
+
+# Save iptables rules
+echo "Saving iptables rules..."
+sudo sh -c 'iptables-save > /etc/iptables/rules.v4'
+
+# Configure Tor
+echo "Configuring Tor..."
+sudo sh -c 'echo "SOCKSPort 9050" >> /etc/tor/torrc'
+sudo systemctl restart tor
+
+
+echo "Configuring ProxyChains..."
+sudo sh -c 'cat > /etc/proxychains4.conf <<EOT
+dynamic_chain
+proxy_dns
+tcp_read_time_out 15000
+tcp_connect_time_out 8000
+
+[ProxyList]
+socks5  127.0.0.1 9050
+EOT'
+
+# Clone Wirehole repository
+echo "Cloning Wirehole repository..."
+git clone https://github.com/IAmStoxe/wirehole.git
+cd wirehole
 
 # Modify docker-compose.yml to include Tor and Web UI
 echo "Modifying docker-compose.yml to include Tor and Web UI..."
